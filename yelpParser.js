@@ -2,6 +2,7 @@ const puppeteer = require('puppeteer');
 var jsonfile = require('jsonfile')
 var fs = require('fs')
 var _ = require('lodash');
+const chalk = require('chalk');
 
 
 
@@ -19,32 +20,52 @@ var _ = require('lodash');
 //   4.6 Website
 
 // Selectors
-const BUSNIESSNAME = '#find_desc'; // serach fild
-const LOCATION = '#dropperText_Mast'; // Location
 
+
+async function log(status, step, message) {
+
+  if (status === 'error') {
+    console.log(chalk.red(`\t${step} -> ${message}`))
+  } else {
+    console.log(chalk.green(`\t${step} -> ${message}`));
+  }
+}
+
+async function submiySerachForm(page, typeofbusiness, location) {
+  try {
+    await page.focus('#find_desc')
+    await page.type('#find_desc', typeofbusiness, {delay: 100}) // search bar
+    // page.waitFor(200);
+    await page.focus('#dropperText_Mast')
+    await page.type('#dropperText_Mast', location, {delay: 100}) // location
+    const inputElement = await page.$('button[type=submit]');
+    await inputElement.click();
+    log('success', `Typing ${typeofbusiness} and ${location} in search fields`, 'DONE')
+  } catch (error) {
+    log('error', `typing ${typeofbusiness} in search fild`, ' Failed!')
+  }
+}
 
 async function run() {
-  const browser = await puppeteer.launch({headless: false});
-  const page = await browser.newPage(); 
-  await page.goto('http://yelp.com'); 
-  console.log(`URL Loaded ${page.url()}`);
+  const browser = await puppeteer.launch({
+    headless: false
+  });
+  const page = await browser.newPage();
+  
+  try {
+    await page.goto('http://yelp.com');
+    log('success', 'Opening Yelp', `URL Loaded ${page.url()}`);
+    await page.waitFor(1000);
+  } catch (error) {
+    log('error', "Opening Yelp", "Can't open the yelp")
+  }
+
+  // Step 1: 
+  await submiySerachForm(page, 'restaurants', 'walnut creek, ca');
 
 
 
-  
 
-  
-    
-  
-
-  
-  
-
-   
-  
-   
-  
-  
   // await browser.close();
 }
 
