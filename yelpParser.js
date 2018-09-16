@@ -19,49 +19,106 @@ const chalk = require('chalk');
 //   4.5 Adress 
 //   4.6 Website
 
+
+
+// --------------- HELPERS
 // Selectors
 
-
-async function log(status, step, message) {
-
-  if (status === 'error') {
-    console.log(chalk.red(`\t${step} -> ${message}`))
-  } else {
-    console.log(chalk.green(`\t${step} -> ${message}`));
-  }
+const SELECTOR = {
+  "SERACHBOX": '#find_desc',
+  "LOCATION": '#dropperText_Mast',
+  "PAGINATIONLINKS": 'a.available-number,pagination-links_anchor',
+  "BUSINESSNAME": 'a.biz-name.js-analytics-click'
 }
 
-async function submiySerachForm(page, typeofbusiness, location) {
-  try {
-    await page.focus('#find_desc')
-    await page.type('#find_desc', typeofbusiness, {delay: 100}) // search bar
-    // page.waitFor(200);
-    await page.focus('#dropperText_Mast')
-    await page.type('#dropperText_Mast', location, {delay: 100}) // location
-    const inputElement = await page.$('button[type=submit]');
-    await inputElement.click();
-    log('success', `Typing ${typeofbusiness} and ${location} in search fields`, 'DONE')
-  } catch (error) {
-    log('error', `typing ${typeofbusiness} in search fild`, ' Failed!')
-  }
+
+async function log(status, message) {
+  status === 'error' ? console.log(chalk.red(`\t${message}`)) : console.log(chalk.green(`\t${message}`));
 }
 
-async function run() {
+async function buinessNamesUrlsCleaner(urls) {
+  const _t = []
+  urls.map(a => {
+    if (a.includes('yelp.com/biz'))  _t.push(a.trim());
+  })
+  return _t
+}
+
+
+async function main() {
   const browser = await puppeteer.launch({
-    headless: false
+    headless: true
   });
   const page = await browser.newPage();
-  
+  await page.setViewport({
+    width: 1280,
+    height: 800
+  })
+
   try {
     await page.goto('http://yelp.com');
     log('success', 'Opening Yelp', `URL Loaded ${page.url()}`);
     await page.waitFor(1000);
   } catch (error) {
-    log('error', "Opening Yelp", "Can't open the yelp")
+    log('error', "Opening Yelp.com", "Can't open Yelp.com")
   }
 
-  // Step 1: 
-  await submiySerachForm(page, 'restaurants', 'walnut creek, ca');
+
+  try {
+    await page.focus(SELECTOR.SERACHBOX)
+    await page.type(SELECTOR.SERACHBOX, "Restaurant", {
+      delay: 10
+    })
+    log('success', `Typing "Restaurant" in search field.`)
+
+    await page.focus(SELECTOR.LOCATION)
+    await page.type(SELECTOR.LOCATION, "Walnut Creek, CA", {
+      delay: 10
+    }) // location
+    log('success', `Typing Walnut Creek, CA in search fields.`)
+    const inputElement = await page.$('button[type=submit]');
+    await inputElement.click();
+    log('success', `Form Submitted`)
+    await page.waitForNavigation()
+    await page.waitFor(2000);
+
+    // Get all paginations links
+    const pageLinks = []
+    pageLinks.push(page.url()) // push the current link into all links
+    const links = await page.$$eval(SELECTOR.PAGINATIONLINKS, as => as.map(a => a.href.trim()))
+    pageLinks.push(...links) // push all the pagination links into all links
+    log('sucess', 'Links Scrapped')
+
+    async function gotToEachPageAndScrapData(url) {
+      let _temp = []
+      const page = await browser.newPage();
+      await page.goto(url)
+      page.waitForFunction()
+      page.waitFor(1000)
+      await page.close()
+    }
+
+    //--------- Get all Business Links from each page
+    await page.waitForSelector('a.biz-name.js-analytics-click');
+    let businessNames = await page.evaluate(() => {
+      const links = Array.from(document.querySelectorAll('a.biz-name.js-analytics-click'))
+      return links.map(link => link.href).slice(0, 10)
+    })
+    log('success', 'Business names scrapped');
+
+    businessNames = await buinessNamesUrlsCleaner(businessNames);
+    console.log(businessNames)
+    // await gotToEachPageAndScrapData(links[0])
+
+  } catch (error) {
+    log('error', `Ooops! ${error.message}`)
+  }
+
+
+
+
+
+
 
 
 
@@ -69,4 +126,4 @@ async function run() {
   // await browser.close();
 }
 
-run();
+main();
