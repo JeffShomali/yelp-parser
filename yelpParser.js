@@ -6,23 +6,7 @@ const chalk = require('chalk');
 
 
 
-
-//TODO:
-// 1. Go to Yelp
-// 2. Input the Retaurant // or https://www.yelp.com/search?find_desc=italian+restaurant&find_loc=san+ramon&ns=1
-// 3. Type the City
-// 4. Select page one by one
-//   4.1 Get restaurant name 
-//   4.2 Click readmore 
-//   4.3 go next page 
-//   4.4 scrap Business name 
-//   4.5 Adress 
-//   4.6 Website
-
-
-
 // --------------- HELPERS
-// Selectors
 
 const SELECTOR = {
   "SERACHBOX": '#find_desc',
@@ -31,23 +15,35 @@ const SELECTOR = {
   "BUSINESSNAME": 'a.biz-name.js-analytics-click'
 }
 
-
+/**
+ * Log to the console
+ * @param {string} status 
+ * @param {string} message 
+ */
 async function log(status, message) {
   status === 'error' ? console.log(chalk.red(`\t${message}`)) : console.log(chalk.green(`\t${message}`));
 }
 
-async function buinessNamesUrlsCleaner(urls) {
+/**
+ *  Remove Ads from list of links
+ * @param {arrays} urls 
+ * @return array of links without ads links
+ */
+function buinessNamesUrlsCleaner(urls) {
   const _t = []
   urls.map(a => {
-    if (a.includes('yelp.com/biz'))  _t.push(a.trim());
+    if (a.includes('yelp.com/biz')) _t.push(a.trim());
   })
   return _t
 }
 
 
+
+
 async function main() {
   const browser = await puppeteer.launch({
-    headless: true
+    headless: false,
+    timeout: 0
   });
   const page = await browser.newPage();
   await page.setViewport({
@@ -82,46 +78,51 @@ async function main() {
     await page.waitForNavigation()
     await page.waitFor(2000);
 
-    // Get all paginations links
-    const pageLinks = []
-    pageLinks.push(page.url()) // push the current link into all links
+    //---------------  Get all paginations links
+    const paginationUrls = []
+    paginationUrls.push(page.url()) // push the current link into all links
     const links = await page.$$eval(SELECTOR.PAGINATIONLINKS, as => as.map(a => a.href.trim()))
-    pageLinks.push(...links) // push all the pagination links into all links
+    paginationUrls.push(...links) // push all the pagination links into all links
     log('sucess', 'Links Scrapped')
 
-    async function gotToEachPageAndScrapData(url) {
-      let _temp = []
+    // -------------------- Get each pagination links and get business links
+    var allRestauranLinks = []
+    async function gotToEachPaginationLinksAndGetBusinessLinks(url) {
       const page = await browser.newPage();
-      await page.goto(url)
-      page.waitForFunction()
-      page.waitFor(1000)
-      await page.close()
+      await page.setExtraHTTPHeaders({
+        Referer: 'https://yelp.com/'
+      })
+      await page.goto(url, {timeout: 0})
+      await page.waitForSelector('a.biz-name.js-analytics-click');
+
+      let businessNames = await page.evaluate(() => {
+        const links = Array.from(document.querySelectorAll('a.biz-name.js-analytics-click'))
+        return links.map(link => link.href)
+      })
+
+      let businessNamesLinksWithoutAds = buinessNamesUrlsCleaner(businessNames)
+      allRestauranLinks.push(...businessNamesLinksWithoutAds)
+      log('success', 'Business names scrapped and trying to close this page.');
+      await page.close();
+
     }
 
     //--------- Get all Business Links from each page
-    await page.waitForSelector('a.biz-name.js-analytics-click');
-    let businessNames = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a.biz-name.js-analytics-click'))
-      return links.map(link => link.href).slice(0, 10)
-    })
-    log('success', 'Business names scrapped');
+    for (const link of paginationUrls) {
+      await gotToEachPaginationLinksAndGetBusinessLinks(link)
+    }
+    log('success', 'Looped all pagination links and add result into the All resturant links.');
 
-    businessNames = await buinessNamesUrlsCleaner(businessNames);
-    console.log(businessNames)
-    // await gotToEachPageAndScrapData(links[0])
+    // Add all Results into the Data file
+    // for (const link of allRestauranLinks) {
+    //   fs.writeFile("data.txt", link);
+    // }
+    // log('success', 'Add all restaurant links into the data.txt.');
+
 
   } catch (error) {
     log('error', `Ooops! ${error.message}`)
   }
-
-
-
-
-
-
-
-
-
 
   // await browser.close();
 }
